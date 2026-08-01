@@ -1,0 +1,10 @@
+[33mcommit 542bcf710b9fe4f1a608ddb497b7655a31c94a35[m
+Author: salina1031 <salinabhattarai09@gmail.com>
+Date:   Tue Jul 21 14:13:11 2026 +0545
+
+    admin authentication
+
+ lib/services/auth_service.dart      |  45 [32m+++[m[31m------------[m
+ lib/services/firestore_service.dart | 106 [32m++++++++++++++++++++++++++[m[31m----------[m
+ scripts/serviceAccountKey.json      |  13 [32m+++++[m
+ 3 files changed, 98 insertions(+), 66 deletions(-)

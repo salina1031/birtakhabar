@@ -12,3 +12,5 @@ macos/
 linux/
 windows/
 lib/firebase_options.dart
+# Ignore Firebase service account key
+scripts/serviceAccountKey.json

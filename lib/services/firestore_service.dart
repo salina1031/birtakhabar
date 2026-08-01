@@ -1,91 +1,134 @@
-// import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/news_article.dart';
 import '../models/emergency_alert.dart';
 import '../models/news_tip.dart';
 import '../utils/constants.dart';
 
-/// Central data access layer for BirtaKhabar's Firestore collections.
-/// Corresponds to the "Data Layer" of the system architecture (Cloud Firestore).
 class FirestoreService {
-  // final FirebaseFirestore _db = FirebaseFirestore.instance;
-  // TODO: Restore Firestore usage when billing is available and Firestore is enabled.
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ---------------- News feed ----------------
 
   Stream<List<NewsArticle>> streamNews({NewsCategory? category}) {
-    // Firestore is disabled; return an empty stream as a safe fallback.
-    print('FirestoreService: streamNews called but Firestore is disabled. Returning empty list stream.');
-    return Stream.value(<NewsArticle>[]);
+    Query<Map<String, dynamic>> query = _db
+        .collection(FirestoreCollections.news)
+        .orderBy('publishedAt', descending: true);
+    if (category != null) {
+      query = query.where('category', isEqualTo: category.name);
+    }
+    return query.snapshots().map(
+      (snap) => snap.docs.map((d) => NewsArticle.fromDoc(d)).toList(),
+    );
   }
 
   Future<NewsArticle> getArticle(String id) async {
-    // Firestore disabled: cannot fetch article. Return a failed future.
-    print('FirestoreService: getArticle skipped (Firestore disabled) for id=$id');
-    return Future.error('Firestore disabled');
+    final doc = await _db.collection(FirestoreCollections.news).doc(id).get();
+    if (!doc.exists) throw Exception('Article not found');
+    return NewsArticle.fromDoc(doc);
   }
 
   Future<void> incrementViewCount(String id) async {
-    // No-op while Firestore is disabled.
-    print('FirestoreService: incrementViewCount skipped (Firestore disabled) for id=$id');
+    await _db.collection(FirestoreCollections.news).doc(id).update({
+      'viewCount': FieldValue.increment(1),
+    });
   }
 
   Future<void> publishArticle(NewsArticle article) async {
-    print('FirestoreService: publishArticle skipped (Firestore disabled)');
+    await _db.collection(FirestoreCollections.news).add(article.toMap());
   }
 
   Future<void> deleteArticle(String id) async {
-    print('FirestoreService: deleteArticle skipped (Firestore disabled) id=$id');
+    await _db.collection(FirestoreCollections.news).doc(id).delete();
   }
 
   // ---------------- Emergency alerts ----------------
 
   Stream<List<EmergencyAlert>> streamAlerts({bool activeOnly = true}) {
-    print('FirestoreService: streamAlerts called but Firestore is disabled. Returning empty list stream.');
-    return Stream.value(<EmergencyAlert>[]);
+    Query<Map<String, dynamic>> query = _db
+        .collection(FirestoreCollections.alerts)
+        .orderBy('postedAt', descending: true);
+    if (activeOnly) {
+      query = query.where('isActive', isEqualTo: true);
+    }
+    return query.snapshots().map(
+      (snap) => snap.docs.map((d) => EmergencyAlert.fromDoc(d)).toList(),
+    );
   }
 
   Future<void> postAlert(EmergencyAlert alert) async {
-    print('FirestoreService: postAlert skipped (Firestore disabled)');
+    await _db.collection(FirestoreCollections.alerts).add(alert.toMap());
   }
 
   Future<void> deactivateAlert(String id) async {
-    print('FirestoreService: deactivateAlert skipped (Firestore disabled) id=$id');
+    await _db.collection(FirestoreCollections.alerts).doc(id).update({'isActive': false});
   }
 
   // ---------------- Community news tips ----------------
 
   Future<void> submitTip(NewsTip tip) async {
-    print('FirestoreService: submitTip skipped (Firestore disabled)');
+    await _db.collection(FirestoreCollections.newsTips).doc(tip.id).set(tip.toMap());
   }
 
   Stream<List<NewsTip>> streamTips({TipStatus? status}) {
-    print('FirestoreService: streamTips called but Firestore is disabled. Returning empty list stream.');
-    return Stream.value(<NewsTip>[]);
+    Query<Map<String, dynamic>> query = _db
+        .collection(FirestoreCollections.newsTips)
+        .orderBy('submittedAt', descending: true);
+    if (status != null) {
+      query = query.where('status', isEqualTo: status.name);
+    }
+    return query.snapshots().map(
+      (snap) => snap.docs.map((d) => NewsTip.fromDoc(d)).toList(),
+    );
   }
 
   Future<void> reviewTip(String id, TipStatus status, {String? note}) async {
-    print('FirestoreService: reviewTip skipped (Firestore disabled) id=$id');
+    await _db.collection(FirestoreCollections.newsTips).doc(id).update({
+      'status': status.name,
+      if (note != null) 'reviewNote': note,
+    });
   }
 
   // ---------------- Saved / bookmarked articles ----------------
-  // Stored per-user at users/{uid}/saved/{articleId}
 
   Future<void> saveArticle(String uid, NewsArticle article) async {
-    print('FirestoreService: saveArticle skipped (Firestore disabled) uid=$uid article=${article.id}');
+    await _db
+        .collection(FirestoreCollections.users)
+        .doc(uid)
+        .collection('saved')
+        .doc(article.id)
+        .set({'savedAt': FieldValue.serverTimestamp()});
   }
 
   Future<void> unsaveArticle(String uid, String articleId) async {
-    print('FirestoreService: unsaveArticle skipped (Firestore disabled) uid=$uid articleId=$articleId');
+    await _db
+        .collection(FirestoreCollections.users)
+        .doc(uid)
+        .collection('saved')
+        .doc(articleId)
+        .delete();
   }
 
   Stream<Set<String>> streamSavedIds(String uid) {
-    print('FirestoreService: streamSavedIds called but Firestore is disabled. Returning empty set stream.');
-    return Stream.value(<String>{});
+    return _db
+        .collection(FirestoreCollections.users)
+        .doc(uid)
+        .collection('saved')
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => d.id).toSet());
   }
 
   Future<List<NewsArticle>> getSavedArticles(Set<String> ids) async {
     if (ids.isEmpty) return [];
-    print('FirestoreService: getSavedArticles skipped (Firestore disabled)');
-    return [];
+    final idList = ids.toList();
+    final articles = <NewsArticle>[];
+    for (var i = 0; i < idList.length; i += 30) {
+      final chunk = idList.sublist(i, i + 30 > idList.length ? idList.length : i + 30);
+      final snap = await _db
+          .collection(FirestoreCollections.news)
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      articles.addAll(snap.docs.map((d) => NewsArticle.fromDoc(d)));
+    }
+    return articles;
   }
 }
